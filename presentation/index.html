@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>Open Up</title>
+
+		<meta name="description" content="Open Up : Lesson 2 DNS servers">
+		<meta name="author" content="Tellier Benoit">
+
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css" id="theme">
+
+		<!-- Code syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+	
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+
+
+
+<section>
+<img data-src="img/large.png"><br/>
+<img data-src="img/openup.png">
+
+<h2>Load balancing and replication</h2>
+
+<p>Speaker : <a>Benoit Tellier</a></p>
+
+<p><small>
+Retrieve this presentation online : <a href="https://rawgit.com/Open-Up/openup02_13/master/presentation/index.html">https://rawgit.com/Open-Up/openup02_13/master/presentation/index.html</a><br/>
+And on <a href="https://github.com/Open-Up/openup02_13/">GitHub</a></small>
+</p>
+</section>
+
+<!--------------------------------------------------
+----------------------------------------------------
+================================================----
+NEW SECTION NEW SECTION NEW SECTION NEW SECTION=----
+================================================----
+----------------------------------------------------
+---------------------------------------------------->
+
+<section>
+<h2>Objectives</h2>
+<ul>
+  <li class="fragment">How to manage scale on stateless applications</li>
+  <li class="fragment">How to manage scale on stateful applications</li>
+  <li class="fragment">Set up load balancing</li>
+  <li class="fragment">Set up replication</li>
+  <li class="fragment">Know replication limits</li>
+  <li class="fragment">Understand "no point of failure" thinking</li>
+</ul>
+</section>
+
+
+
+
+<!--------------------------------------------------
+----------------------------------------------------
+================================================----
+NEW SECTION NEW SECTION NEW SECTION NEW SECTION=----
+================================================----
+----------------------------------------------------
+---------------------------------------------------->
+
+<section>
+
+  <section>
+    <h1>Playing with DNS</h1>
+  </section>
+
+    <section>
+    <h2>DNS round robin</h2>
+    <pre><code>mail    IN  A       192.168.0.4
+        IN  A       192.168.0.5
+        IN  A       192.168.0.6</code></pre>
+<pre class="fragment"><code>mail    A 192.168.0.4
+mail    A 192.168.0.5
+mail    A 192.168.0.6</code></pre>
+<pre class="fragment"><code>mail    A 192.168.0.5
+mail    A 192.168.0.6
+mail    A 192.168.0.4</code></pre>
+<pre class="fragment"><code>mail    A 192.168.0.6
+mail    A 192.168.0.4
+mail    A 192.168.0.5</code></pre>
+<pre class="fragment"><code>mail    A 192.168.0.4
+mail    A 192.168.0.5
+mail    A 192.168.0.6</code></pre>
+<p class="fragment">...</p>
+  </section>
+
+    <section>
+    <h2>DNS round robin</h2>
+<ul>
+  <li class="fragment">Pros : accross IPs</li>
+  <li class="fragment">Pros : easy to set up</li>
+  <li class="fragment">Cons : no health checks</li>
+  <li class="fragment">Cons : Cache</li>
+  <li class="fragment">Cons : TTL</li>
+</ul>
+  </section>
+
+
+    <section>
+    <h2>DNS view</h2>
+    <p>Goal : direct the client to the nearest servers</p>
+    <pre class="fragment"><code>view "all" {
+	match-clients { any; };
+
+	include "/etc/bind/named.conf.minet.all";
+
+	notify-source 157.159.40.55 port 53;
+};</code></pre>
+  </section>
+
+</section>
+
+
+
+
+<!--------------------------------------------------
+----------------------------------------------------
+================================================----
+NEW SECTION NEW SECTION NEW SECTION NEW SECTION=----
+================================================----
+----------------------------------------------------
+---------------------------------------------------->
+
+
+
+
+
+
+<section>
+
+  <section>
+    <h1>Stateless services</h1>
+  </section>
+
+
+  <section>
+    <h2>Stateless architecture</h2>
+    <img data-src="img/stateless.png">
+  </section>
+
+  <section>
+    <h2>HAProxy</h2>
+    <p>Fast and efficient load balancing</p>
+    <p class="fragment">written in 2000 by Willy Tarreau</p>
+    <pre class="fragment"><code># In /etc/default/haproxy
+
+ENABLED=1</code></pre>
+  </section>
+
+  <section>
+    <h2>HAProxy</h2>
+    <pre class="fragment"><code>global
+    daemon
+
+defaults
+        maxconn 10000
+        timeout connect 2s
+        timeout client 10s
+        timeout server 2s
+
+frontend site_http
+        mode http
+        bind 157.159.40.136:80
+        default_backend site_http_b
+
+backend site_http_b
+        mode http
+        balance roundrobin
+        server site1 192.168.103.166:80 check inter 10s
+        server site2 192.168.103.167:80 check inter 10s</code></pre>
+  </section>
+
+  <section>
+    <h2>HAProxy "sticky"</h2>
+    <pre class="fragment"><code>balance source</code></pre>
+  </section>
+
+  <section>
+    <h2>HAProxy and coockies</h2>
+    <pre class="fragment"><code>listen http_proxy :80
+        mode http
+        cookie SERVERID
+        balance source
+        server web1 192.168.103.166 cookie server01
+        server web2 192.168.103.167 cookie server02</code></pre>
+  </section>
+
+    <section>
+    <h2>HA proy</h2>
+    <ul>
+      <li class="fragment">Pros : Health ckeck</li>
+      <li class="fragment">Pros : Modification applies instantly</li>
+      <li class="fragment">Cons : bandwith limitation + single IP</li>
+      <li class="fragment">Cons : Adds latency</li>
+    </ul>
+  </section>
+
+</section>
+
+<!--------------------------------------------------
+----------------------------------------------------
+================================================----
+NEW SECTION NEW SECTION NEW SECTION NEW SECTION=----
+================================================----
+----------------------------------------------------
+---------------------------------------------------->
+
+
+
+
+
+
+<section>
+
+  <section>
+    <h1>Failover</h1>
+  </section>
+
+
+  <section>
+    <h2>Stateless architecture</h2>
+    <img data-src="img/failover.png">
+  </section>
+
+    <section>
+    <h2>UCARP</h2>
+    <p>Common Address Redundancy Protocol (CARP)</p>
+    <p class="fragment">OpenBSD reaction to Virtual Router Redundancy Protocol (VRRP)</p>
+    <pre class="fragment"><code>apt-get install ucarp iputils-arping</code></pre>
+  </section>
+
+    <section>
+    <h2>UCARP</h2>
+    <pre class="fragment"><code>allow-hotplug eth1
+iface eth1 inet static
+        address 157.159.40.137
+        netmask 255.255.255.192
+        ucarp-vid 4
+        ucarp-vip 157.159.40.139
+        ucarp-password toto
+        ucarp-advskew 0
+        ucarp-advbase 1
+        ucarp-master yes
+iface eth1:ucarp inet static
+        address 157.159.40.139
+        netmask 255.255.255.192
+        gateway 157.159.40.129</code></pre>
+  </section>
+
+
+  <section>
+    <h2>n+1/2 problem</h2>
+    <img data-src="img/n_plus_1.png">
+  </section>
+
+</section>
+
+<!--------------------------------------------------
+----------------------------------------------------
+================================================----
+NEW SECTION NEW SECTION NEW SECTION NEW SECTION=----
+================================================----
+----------------------------------------------------
+---------------------------------------------------->
+
+
+
+
+
+
+<section>
+
+  <section>
+    <h1>Replicating statefull services</h1>
+  </section>
+
+  <section>
+    <h2>What we will see</h2>
+    <ul>Due to the hudge diversity of statefull services this session will be based on example :
+      <li class="fragment">Memory : firewalls</li>
+      <li class="fragment">Disk : Any apllication</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Firewall redoundancy</h2>
+    <img data-src="img/firewall_redoundancy.png">
+  </section>
+
+  <section>
+    <h2>Firewall redoundancy</h2>
+    <p>Need to synchronize conntrack</p>
+    <p class="fragment">OpenBSD contributed conntrackd</p>
+  </section>
+
+    <section>
+    <h2>conntrackd</h2>
+    <pre class="fragment"><code>Sync {
+        Mode ALARM {
+                RefreshTime 5
+                CacheTimeout 600
+        }
+         UDP {
+                IPv4_address 192.168.103.208
+                IPv4_Destination_Address 192.168.103.209
+                Port 3780
+                Interface eth0
+                Checksum on
+         }
+}</code></pre>
+  </section>
+
+    <section>
+    <h2>conntrackd</h2>
+    <pre class="fragment"><code>General {
+        Nice -20
+        HashSize 32768
+        HashLimit 131072
+        LogFile on
+        LockFile /var/lock/conntrack.lock
+        UNIX {
+                Path /var/run/conntrackd.ctl
+                Backlog 20
+        }
+        NetlinkBufferSize 2097152
+        NetlinkBufferSizeMaxGrowth 8388608
+        Filter From Userspace {
+                Protocol Accept {
+                        TCP
+                        ICMP
+                }
+                Address Ignore {
+                        IPv4_address 127.0.0.1
+                        IPv4_address 192.168.103.210
+                        IPv4_address 157.159.40.139
+                        IPv4_address 157.159.40.137
+                        IPv4_address 192.168.103.209
+                        IPv4_address 192.168.103.208
+                }
+        }
+}</code></pre>
+  </section>
+
+
+
+  <section>
+    <h2>DRBD</h2>
+    <img data-src="img/drbd.png">
+  </section>
+
+    <section>
+    <h2>drbd</h2>
+    <p>synchronize devices in /dev</p>
+    <pre class="fragment"><code>apt-get install drbd8-utils</code></pre>
+  </section>
+
+    <section>
+    <h2>drbd</h2>
+    <pre class="fragment"><code>resource aaa {
+        protocol C;
+        handlers {
+                pri-on-incon-degr "echo 'DRBD: primary requested but inconsistent!'";
+                pri-lost-after-sb "echo 'DRBD: primary requested but lost!'";
+        }
+ 
+        startup {
+                degr-wfc-timeout 10;
+        }
+ 
+        disk {
+                on-io-error   detach;
+        }
+ 
+        net {
+                timeout 120;
+                connect-int 20;
+                ping-int 20;
+                max-buffers     4096;
+                max-epoch-size  4096;
+                ko-count 30;
+                cram-hmac-alg "sha1";
+                shared-secret "drdbTest1gKey";
+        }
+ 
+        syncer {
+                rate 100M;
+                al-extents 257;
+        }
+ 
+        on benwa-fw-1 {
+                device    /dev/drbd0;
+                disk      /dev/vdb;
+                address   192.168.103.208:7789;
+                meta-disk internal;
+        }
+ 
+        on benwa-fw-2 {
+                device    /dev/drbd0;
+                disk      /dev/vdb;
+                address   192.168.103.209:7789;
+                meta-disk internal;
+        }
+}</code></pre>
+  </section>
+
+    <section>
+    <h2>drbd</h2>
+    <pre class="fragment"><code>drbdadm create-md aaa</code></pre>
+    <pre class="fragment"><code>drbdadm -- --overwrite-data-of-peer primary aaa</code></pre>
+    <pre class="fragment"><code>mkfs.ext4 /dev/drbd0</code></pre>
+  </section>
+
+
+
+
+
+</section>
+
+<!--------------------------------------------------
+----------------------------------------------------
+================================================----
+NEW SECTION NEW SECTION NEW SECTION NEW SECTION=----
+================================================----
+----------------------------------------------------
+---------------------------------------------------->
+
+
+<section>
+	<h1>Questions ?</h1>
+</section>
+
+
+
+
+
+
+
+
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+
+			// Full list of configuration options available at:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				slideNumber: true,
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+                                
+
+				transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+				// Optional reveal.js plugins
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, condition: function() { return !!document.querySelector( 'pre code' ); }, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true },
+					{ src: 'plugin/notes/notes.js', async: true }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>

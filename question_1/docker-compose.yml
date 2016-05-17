@@ -1,0 +1,15 @@
+version: '2'
+services:
+
+  haproxy:
+    build: ./haproxy
+    links:
+     - web1
+     - web2
+
+  web1:
+    build: ./apache
+
+  web2:
+    build: ./apache
+
