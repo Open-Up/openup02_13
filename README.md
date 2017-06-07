@@ -2,7 +2,7 @@
 
 ## Load-balancing, failover, and replication
 
-Retrieve this presentation [online](https://rawgit.com/chibenwa/openup02_13/master/presentation/index.html)
+Retrieve this presentation [online](https://rawgit.com/Open-Up/openup02_13/master/presentation/index.html)
 
 ## Interesting readings
 
